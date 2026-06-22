@@ -9,19 +9,23 @@ import os
 
 print("Downloading signals...")
 openap = oap.OpenAP()
-data = openap.dl_signal('pandas', ['BM', 'Mom12m', 'GP', 'AssetGrowth'])
+data = openap.dl_signal('pandas', ['BM', 'Mom12m', 'GP', 'AssetGrowth', 
+        'TrendFactor', 'ChTax', 'EarningsStreak', 
+        'MS', 'NOA', 'ResidualMomentum', 'roaq'])
 
 # compute forward 1-month return as the target
 print("Building target variable...")
 data = data.sort_values(['permno', 'yyyymm'])
+data = data[data['yyyymm'] <= 199912]
 data['target'] = data.groupby('permno')['Mom12m'].shift(-1)
 
 # drop rows with no target
 data = data.dropna(subset=['target'])
 
 # define features
-features = ['BM', 'Mom12m', 'GP', 'AssetGrowth']
-data = data.dropna(subset=features)
+features = ['BM', 'Mom12m', 'GP', 'AssetGrowth', 
+            'TrendFactor', 'ChTax', 'EarningsStreak',
+            'MS', 'NOA', 'ResidualMomentum', 'roaq']
 
 print(f"Clean dataset shape: {data.shape}")
 
