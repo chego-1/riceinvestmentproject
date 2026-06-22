@@ -89,7 +89,7 @@ def build_report(summaries):
     </style>
 </head>
 <body>
-    <h1>📚 Research Library — {date}</h1>
+    <h1>Research Library — {date}</h1>
     <p>{len(summaries)} papers summarized.</p>
     {cards}
 </body>

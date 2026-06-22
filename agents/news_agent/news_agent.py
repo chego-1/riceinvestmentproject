@@ -73,13 +73,13 @@ def build_html(general_news, stock_news, ai_summary):
         </style>
     </head>
     <body>
-        <h1>📈 Market News — {date}</h1>
+        <h1>Market News — {date}</h1>
         <div class="summary"><span>AI Summary:</span> {ai_summary}</div>
 
-        <h2>🌍 General Market News</h2>
+        <h2>General Market News</h2>
         {make_cards(general_news)}
 
-        <h2>📊 Watchlist News</h2>
+        <h2>Watchlist News</h2>
         {stock_sections}
     </body>
     </html>
