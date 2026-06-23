@@ -13,7 +13,10 @@ data = openap.dl_signal('pandas', [
     'TrendFactor', 'ChTax', 'EarningsStreak',
     'MS', 'NOA', 'ResidualMomentum', 'roaq',
     'DivSeason', 'AbnormalAccruals', 'CompositeDebtIssuance',
-    'IntMom', 'MomVol', 'OScore', 'Accruals', 'IdioVol3F'
+    'IntMom', 'MomVol', 'OScore', 'Accruals', 'IdioVol3F',
+    'FirmAgeMom', 'dNoa', 'DelCOA', 'EntMult',
+    'ShareIss1Y', 'NetDebtFinance', 'InvGrowth',
+    'hire', 'BMdec', 'PS', 'Mom6mJunk'
 ])
 
 print("Building target variable...")
@@ -27,7 +30,10 @@ features = [
     'TrendFactor', 'ChTax', 'EarningsStreak',
     'MS', 'NOA', 'ResidualMomentum', 'roaq',
     'DivSeason', 'AbnormalAccruals', 'CompositeDebtIssuance',
-    'IntMom', 'MomVol', 'OScore', 'Accruals', 'IdioVol3F'
+    'IntMom', 'MomVol', 'OScore', 'Accruals', 'IdioVol3F',
+    'FirmAgeMom', 'dNoa', 'DelCOA', 'EntMult',
+    'ShareIss1Y', 'NetDebtFinance', 'InvGrowth',
+    'hire', 'BMdec', 'PS', 'Mom6mJunk'
 ]
 
 print(f"Clean dataset shape: {data.shape}")
@@ -43,14 +49,14 @@ print(f"Training on {len(X_train)} rows, testing on {len(X_test)} rows")
 
 print("Training LightGBM...")
 model = lgb.LGBMRegressor(
-    n_estimators=1000,
-    learning_rate=0.02,
-    num_leaves=63,
-    min_child_samples=100,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    reg_alpha=0.1,
-    reg_lambda=0.1,
+    n_estimators=2000,
+    learning_rate=0.01,
+    num_leaves=127,
+    min_child_samples=200,
+    subsample=0.7,
+    colsample_bytree=0.7,
+    reg_alpha=0.05,
+    reg_lambda=0.05,
     random_state=42
 )
 
