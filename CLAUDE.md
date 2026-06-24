@@ -1,5 +1,5 @@
 # Rice Investment Fund — Project State
-**Last updated:** June 24, 2026  
+**Last updated:** June 24, 2026 (session 2)  
 **Repo:** github.com/chego-1/riceinvestmentproject  
 **Local path:** ~/Desktop/Coding/ai-fund  
 **Python:** 3.11 (venv at ~/Desktop/Coding/ai-fund/venv)  
@@ -58,14 +58,14 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 #### 4. Backtest — `models/backtest.py`
 - Uses pre-computed OpenAssetPricing portfolio returns
 - Out-of-sample period: 2000–2020
-- **Results: 156% total return, 0.52 Sharpe ratio**
+- **Results: 231.9% total return, 0.88 Sharpe ratio**
 - Run: `python models/backtest.py`
 
 #### 5. CAPM Alpha Test — `models/alpha_test.py`
 - Uses Ken French data library (risk-free rates + market returns)
-- CAPM regression on long-short strategy
-- **Results: 5.83% annualized alpha, t-stat 3.04, p-value 0.003 (significant at 1% level)**
-- Beta: -0.29 (slightly negatively correlated with market — defensive)
+- CAPM regression on long-short strategy with Newey-West (HAC, 6 lags) standard errors
+- **Results: 5.82% annualized alpha, t-stat 4.70, p-value ~0.000 (significant at 1% level)**
+- Beta: -0.22 (slightly negatively correlated with market — defensive)
 - Run: `python models/alpha_test.py`
 
 #### 6. FinBERT Sentiment Agent — `agents/researcher/sentiment_agent.py`
@@ -81,7 +81,7 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 ### 🔴 WRDS / CRSP Linking Table (MAIN BLOCKER)
 - **Problem:** FinBERT sentiment scores use ticker symbols; OpenAssetPricing uses CRSP permno IDs — can't merge without a linking table
 - **Why it matters:** Merging sentiment into the LightGBM model as an additional feature requires this mapping
-- **Status:** UT Austin denied WRDS access (undergrad license restriction). Email sent to Professor Back requesting either Rice WRDS access or the linking table directly
+- **Status:** UT Austin denied WRDS access (undergrad license restriction). Email sent to Professor Back — he has agreed to provide access, pending receipt
 - **Workaround considered:** yfinance / Simfin — rejected because they lack the depth of fundamental signals in OpenAssetPricing
 
 ---
