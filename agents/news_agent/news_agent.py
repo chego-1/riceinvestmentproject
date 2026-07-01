@@ -20,15 +20,30 @@ def get_stock_news(ticker):
     news = finnhub_client.company_news(ticker, _from=today, to=today)
     return news[:3]
 
-def get_ai_summary(headlines):
-    headline_text = "\n".join([h['headline'] for h in headlines])
-    
+def get_ai_summary(general_news, stock_news):
+    general_text = "\n".join([h['headline'] for h in general_news])
+
+    watchlist_lines = []
+    for ticker, news in stock_news.items():
+        for h in news:
+            watchlist_lines.append(f"[{ticker}] {h['headline']}")
+    watchlist_text = "\n".join(watchlist_lines)
+
+    prompt = (
+        "Based on the headlines below, write a 4-5 sentence summary of what's happening in markets today. "
+        "First cover general market conditions, then specifically call out any notable news for our watchlist "
+        "tickers (AAPL, NVDA, MSFT, TSLA, TSMC, ASML) if present. Be concise and factual. If there is no "
+        "watchlist-specific news, say so briefly instead of omitting it.\n\n"
+        f"GENERAL MARKET HEADLINES:\n{general_text}\n\n"
+        f"WATCHLIST HEADLINES:\n{watchlist_text if watchlist_text else '(none today)'}"
+    )
+
     message = anthropic_client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=200,
+        max_tokens=300,
         messages=[{
             "role": "user",
-            "content": f"Based on these market headlines, write a 2-3 sentence summary of what's happening in markets today. Be concise and factual.\n\n{headline_text}"
+            "content": prompt
         }]
     )
     return message.content[0].text
@@ -97,7 +112,7 @@ def run():
         stock_news[ticker] = get_stock_news(ticker)
 
     print("Generating AI summary...")
-    ai_summary = get_ai_summary(general_news)
+    ai_summary = get_ai_summary(general_news, stock_news)
 
     html = build_html(general_news, stock_news, ai_summary)
 

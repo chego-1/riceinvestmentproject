@@ -1,5 +1,5 @@
 # Rice Investment Fund — Project State
-**Last updated:** June 24, 2026 (session 2)  
+**Last updated:** July 1, 2026 (session 3)  
 **Repo:** github.com/chego-1/riceinvestmentproject  
 **Local path:** ~/Desktop/Coding/ai-fund  
 **Python:** 3.11 (venv at ~/Desktop/Coding/ai-fund/venv)  
@@ -42,6 +42,7 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 #### 1. News Agent — `agents/news_agent/news_agent.py`
 - Pulls Finnhub headlines + summaries for a watchlist of tickers
 - Uses Claude Sonnet (via Anthropic API) to summarize and generate structured HTML report
+- **Updated (session 3):** AI summary now also incorporates watchlist-specific headlines (tagged by ticker), not just general market news; prompt explicitly asks Claude to call out watchlist news or note when there's none
 - Run: `python agents/news_agent/news_agent.py`
 
 #### 2. Researcher Agent — `agents/researcher/researcher_agent.py`
@@ -74,6 +75,15 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 - Output: `data/processed/sentiment_scores.csv`
 - Run: `python agents/researcher/sentiment_agent.py`
 
+#### 7. StockTwits Sentiment Agent — `agents/researcher/stocktwits_agent.py` (NEW, session 3)
+- Pulls from the public `stocktwits-nyu` S3 bucket (Li, Al Ansari & Kaufman 2025 dataset — [repo](https://github.com/Jaxingjili/StockTwits-from-2008-to-2022)), no AWS credentials needed
+- Samples 150k rows/shard (full dataset is ~550M messages — sampling for prototyping, same pattern as `sentiment_agent.py`'s FNSPID subsample), filters to the same ticker universe + 2009–2020 window as FinBERT
+- Aggregates monthly `bullish_rate` / `avg_sentiment` / `n_messages` per ticker (user-tagged bullish/bearish, not model-inferred)
+- Output: `data/processed/stocktwits_scores.csv`
+- Run: `python agents/researcher/stocktwits_agent.py`
+- **Test run result (first pass, small sample):** 1,365 ticker-months, 91 tickers. Correlation with FinBERT sentiment on 923 overlapping ticker-months was ~0.02–0.12 depending on noise filtering — essentially uncorrelated. Likely partly a sampling artifact (median ticker-month had only 3 messages in this small pull) rather than a real finding; needs a bigger sample (raise `ROWS_PER_SHARD` or pull full shards) before drawing conclusions about whether StockTwits sentiment adds signal beyond FinBERT.
+- Like FinBERT sentiment, this is **not yet merged into the model** — same permno/ticker blocker applies. It's a second candidate sentiment feature waiting at the same merge step.
+
 ---
 
 ## Current Blockers
@@ -88,11 +98,12 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 
 ## Next Steps (Priority Order)
 1. **Wait for Professor Back's reply** on WRDS/CRSP access
-2. **Once linking table received:** merge sentiment scores into signal data → retrain LightGBM with sentiment as feature → re-run backtest and CAPM test
-3. **Portfolio manager agent** — risk model, portfolio construction layer
-4. **Trader agent** — execution logic
-5. **Auditor agent** — performance monitoring and reporting
-6. **Full multi-agent orchestration** — connect all agents into unified pipeline
+2. **Once linking table received:** merge sentiment scores (FinBERT + StockTwits) into signal data → retrain LightGBM with sentiment as features → re-run backtest and CAPM test → ablate to see if either/both sentiment sources actually improve Sharpe/alpha
+3. **Rerun StockTwits agent at larger sample size** to get a real read on whether it correlates with/complements FinBERT (current test used a small per-shard sample, too noisy to conclude much)
+4. **Portfolio manager agent** — risk model, portfolio construction layer
+5. **Trader agent** — execution logic
+6. **Auditor agent** — performance monitoring and reporting
+7. **Full multi-agent orchestration** — connect all agents into unified pipeline
 
 ---
 
@@ -118,6 +129,8 @@ requests
 finnhub-python
 transformers  # for FinBERT
 torch
+boto3  # for StockTwits agent (public S3 access)
+s3fs   # for StockTwits agent (pandas read_csv from S3)
 ```
 
 ---
