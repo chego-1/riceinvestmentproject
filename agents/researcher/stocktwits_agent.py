@@ -15,7 +15,10 @@ PREFIX = "dataset/v1/data/csv/symbol_sentiments/"
 # pulling everything isn't practical for a first pass. Taking the first N rows
 # of every shard gives a time-spread sample since shards are chronological,
 # same "subsample for prototyping" approach used in sentiment_agent.py.
-ROWS_PER_SHARD = 150_000
+# Bumped from 150k -> 1M after the first test run showed most ticker-months had
+# only 1-3 messages (too noisy to compare against FinBERT). This will take
+# noticeably longer to download/run.
+ROWS_PER_SHARD = 1_000_000
 
 # Match the FNSPID/FinBERT window so the two sentiment sources are directly comparable.
 DATE_START = "2009-01-01"

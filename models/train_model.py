@@ -19,11 +19,39 @@ data = openap.dl_signal('pandas', [
     'hire', 'BMdec', 'PS', 'Mom6mJunk'
 ])
 
+# Factor-momentum features, from "Factor Momentum Everywhere" (Ehsani & Linnainmaa) in
+# papers/summaries.json: prior 1-month factor return is the strongest predictor of
+# near-term factor performance, with 12-month lookback also adding value. These are
+# market-wide (same value for every stock in a given month), unlike the characteristics above.
+print("Loading Fama-French factor data for factor-momentum features...")
+ff = pd.read_csv(
+    'data/raw/F-F_Research_Data_Factors.csv',
+    skiprows=3,
+    names=['yyyymm', 'Mkt_RF', 'SMB', 'HML', 'RF'],
+    index_col=False,
+)
+ff = ff[ff['yyyymm'].astype(str).str.len() == 6]
+ff['yyyymm'] = ff['yyyymm'].astype(int)
+for col in ['Mkt_RF', 'SMB', 'HML']:
+    ff[col] = pd.to_numeric(ff[col], errors='coerce')
+ff = ff.dropna().sort_values('yyyymm').reset_index(drop=True)
+
+factor_cols = ['Mkt_RF', 'SMB', 'HML']
+for col in factor_cols:
+    ff[f'{col}_1m'] = ff[col]
+    ff[f'{col}_12m'] = ff[col].rolling(12).sum()
+
+ff_features = [f'{c}_1m' for c in factor_cols] + [f'{c}_12m' for c in factor_cols]
+ff_merge = ff[['yyyymm'] + ff_features]
+
 print("Building target variable...")
 data = data.sort_values(['permno', 'yyyymm'])
 data = data[data['yyyymm'] <= 199912]
 data['target'] = data.groupby('permno')['Mom12m'].shift(-1)
-data = data.dropna(subset=['target'])
+
+print("Merging factor-momentum features onto signal panel (by yyyymm)...")
+data = data.merge(ff_merge, on='yyyymm', how='left')
+data = data.dropna(subset=['target'] + ff_features)
 
 features = [
     'BM', 'Mom12m', 'GP', 'AssetGrowth',
@@ -34,7 +62,7 @@ features = [
     'FirmAgeMom', 'dNoa', 'DelCOA', 'EntMult',
     'ShareIss1Y', 'NetDebtFinance', 'InvGrowth',
     'hire', 'BMdec', 'PS', 'Mom6mJunk'
-]
+] + ff_features
 
 print(f"Clean dataset shape: {data.shape}")
 

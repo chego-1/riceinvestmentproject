@@ -2,8 +2,7 @@
 **Last updated:** July 1, 2026 (session 3)  
 **Repo:** github.com/chego-1/riceinvestmentproject  
 **Local path:** ~/Desktop/Coding/ai-fund  
-**Python:** 3.11 (venv at ~/Desktop/Coding/ai-fund/venv)  
-**Supervisor:** Professor Back, Rice University  
+**Python:** 3.11 (venv at ~/Desktop/Coding/ai-fund/venv)   
 
 ---
 
@@ -12,12 +11,12 @@
 > 1. What was changed or built
 > 2. Any new blockers
 > 3. Next steps
-> Then commit with message: `update CLAUDE.md — [date]`
+> Leave committing to the user — do not run `git commit` automatically.
 
 ---
 
 ## Project Description
-A systematic, ML-driven long-short equity quant fund built in Python. Uses cross-sectional factor signals from OpenAssetPricing to predict stock returns via LightGBM, with NLP sentiment integration via FinBERT. Multi-agent architecture (researcher, portfolio manager, trader, auditor). Assigned by Professor Back at Rice University.
+A systematic, ML-driven long-short equity quant fund built in Python. Uses cross-sectional factor signals from OpenAssetPricing to predict stock returns via LightGBM, with NLP sentiment integration via FinBERT. Multi-agent architecture (researcher, portfolio manager, trader, auditor).
 
 ---
 
@@ -52,9 +51,11 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 
 #### 3. LightGBM Model — `models/train_model.py`
 - Trained on 30 signals from OpenAssetPricing (1986–1999 training period)
-- RMSE: 0.4159
+- **Updated (session 3):** added 6 factor-momentum features (1-month and 12-month trailing Mkt_RF, SMB, HML from Fama-French data) per the "Factor Momentum Everywhere" paper takeaway — 36 features total now
+- **RMSE: 0.4007** (down from 0.4159 baseline). The 6 new factor-momentum features ranked #4-#9 out of 36 in feature importance, ahead of most original characteristics — a real improvement, not noise
 - Saved model: `models/lgbm_model.pkl`
 - Run: `python models/train_model.py`
+- **Caveat:** `backtest.py` and `alpha_test.py` don't consume this model's predictions at all — they equal-weight the 30 raw OpenAssetPricing signal portfolios directly. This RMSE gain won't show up in the 231.9%/0.88 Sharpe/5.82% alpha numbers until a portfolio-construction step is built that actually ranks stocks by the model's output
 
 #### 4. Backtest — `models/backtest.py`
 - Uses pre-computed OpenAssetPricing portfolio returns
@@ -81,7 +82,8 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 - Aggregates monthly `bullish_rate` / `avg_sentiment` / `n_messages` per ticker (user-tagged bullish/bearish, not model-inferred)
 - Output: `data/processed/stocktwits_scores.csv`
 - Run: `python agents/researcher/stocktwits_agent.py`
-- **Test run result (first pass, small sample):** 1,365 ticker-months, 91 tickers. Correlation with FinBERT sentiment on 923 overlapping ticker-months was ~0.02–0.12 depending on noise filtering — essentially uncorrelated. Likely partly a sampling artifact (median ticker-month had only 3 messages in this small pull) rather than a real finding; needs a bigger sample (raise `ROWS_PER_SHARD` or pull full shards) before drawing conclusions about whether StockTwits sentiment adds signal beyond FinBERT.
+- **Test run 1 (150k rows/shard):** 1,365 ticker-months, 91 tickers. Correlation with FinBERT sentiment on 923 overlapping ticker-months was ~0.02–0.12 — too noisy to read (median 3 messages/ticker-month).
+- **Test run 2 (1M rows/shard):** 3,585 ticker-months, 92 tickers, 2,467 overlapping with FinBERT. Correlation stabilized at ~0.09–0.15 (peaks at n_messages≥10 cutoff, corr=0.151) — small but consistently positive across message-count cutoffs, no sign flips. Reading: StockTwits retail sentiment and FinBERT news-based sentiment are weakly related but largely distinct signals, not redundant — supports including both as separate model features rather than picking one.
 - Like FinBERT sentiment, this is **not yet merged into the model** — same permno/ticker blocker applies. It's a second candidate sentiment feature waiting at the same merge step.
 
 ---
@@ -91,15 +93,20 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 ### 🔴 WRDS / CRSP Linking Table (MAIN BLOCKER)
 - **Problem:** FinBERT sentiment scores use ticker symbols; OpenAssetPricing uses CRSP permno IDs — can't merge without a linking table
 - **Why it matters:** Merging sentiment into the LightGBM model as an additional feature requires this mapping
-- **Status:** UT Austin denied WRDS access (undergrad license restriction). Email sent to Professor Back — he has agreed to provide access, pending receipt
+- **Status:** UT Austin denied WRDS access (undergrad license restriction). Request sent to course supervisor — access agreed, pending receipt
 - **Workaround considered:** yfinance / Simfin — rejected because they lack the depth of fundamental signals in OpenAssetPricing
+
+### 🔴 Model-driven backtest also needs WRDS (found session 3)
+- **Problem:** To actually rank individual stocks by the LightGBM model's predicted score and backtest that portfolio (rather than the naive equal-weight of the 30 raw signal portfolios `backtest.py` currently uses), we need real permno-level monthly returns
+- **Why it matters:** Checked the installed `openassetpricing` package source (`openap_download.py`) — the only place it fetches raw per-stock returns (`ret` from `crsp.msf`) is `_dl_signal_crsp3()`, which opens a live `wrds.Connection()`. `dl_port('op', ...)` (what `backtest.py`/`alpha_test.py` use) only returns OpenAssetPricing's own pre-computed portfolio-level returns per signal, not raw stock-level returns re-rankable by the model's blended score
+- **Status:** Same WRDS blocker as above — waiting on supervisor access, no separate workaround in progress
 
 ---
 
 ## Next Steps (Priority Order)
-1. **Wait for Professor Back's reply** on WRDS/CRSP access
+1. **Wait for supervisor reply** on WRDS/CRSP access — unblocks both the sentiment merge AND the model-driven backtest (real permno-level returns)
 2. **Once linking table received:** merge sentiment scores (FinBERT + StockTwits) into signal data → retrain LightGBM with sentiment as features → re-run backtest and CAPM test → ablate to see if either/both sentiment sources actually improve Sharpe/alpha
-3. **Rerun StockTwits agent at larger sample size** to get a real read on whether it correlates with/complements FinBERT (current test used a small per-shard sample, too noisy to conclude much)
+3. **Once WRDS access received:** build the model-driven backtest — rank stocks monthly by LightGBM predicted score, form long-short portfolio from real permno-level returns, compare vs. the naive equal-weight `backtest.py` baseline
 4. **Portfolio manager agent** — risk model, portfolio construction layer
 5. **Trader agent** — execution logic
 6. **Auditor agent** — performance monitoring and reporting
@@ -108,7 +115,7 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 ---
 
 ## Key Architecture Decisions
-- **LightGBM over neural nets** — compute efficiency, professor's recommendation
+- **LightGBM over neural nets** — compute efficiency, advisor recommendation
 - **OpenAssetPricing** — 200+ pre-computed research-grade factors (1986–present), best free source
 - **FinBERT over generic sentiment** — trained specifically on financial text
 - **FNSPID dataset** — large financial news corpus used for sentiment processing
@@ -143,8 +150,3 @@ s3fs   # for StockTwits agent (pandas read_csv from S3)
 - Remote URL was wrong after VS Code created new repo → fixed with `git remote set-url`
 
 ---
-
-## Contact
-- **Professor Back** — Rice University (supervising)
-- **Emil Banchs** — UT Austin, freshman, Economics + Stats & Data Science minor
-- **GitHub:** chego-1
