@@ -69,9 +69,20 @@ print(f"Clean dataset shape: {data.shape}")
 X = data[features]
 y = data['target']
 
-split = int(len(data) * 0.8)
-X_train, X_test = X.iloc[:split], X.iloc[split:]
-y_train, y_test = y.iloc[:split], y.iloc[split:]
+# Time-based split (fixed session 3). The old split did `data.iloc[:split]` after
+# sorting by ['permno', 'yyyymm'] — since permno is the primary sort key, that put
+# entire early-permno stocks' full histories in train and entire later-permno stocks'
+# full histories in test. That's a cross-sectional (leave-some-stocks-out) split
+# disguised as a time split, not the out-of-time validation Freyberger et al. and
+# Rossi (2018) recommend. Fixed to split strictly on calendar month instead.
+months = sorted(data['yyyymm'].unique())
+cutoff_month = months[int(len(months) * 0.8)]
+print(f"Time-based split: train yyyymm <= {cutoff_month}, test yyyymm > {cutoff_month}")
+
+train_mask = data['yyyymm'] <= cutoff_month
+test_mask = data['yyyymm'] > cutoff_month
+X_train, X_test = X[train_mask], X[test_mask]
+y_train, y_test = y[train_mask], y[test_mask]
 
 print(f"Training on {len(X_train)} rows, testing on {len(X_test)} rows")
 
@@ -95,7 +106,18 @@ model.fit(
 
 preds = model.predict(X_test)
 rmse = np.sqrt(mean_squared_error(y_test, preds))
+
+# OOS R^2 (Gu, Kelly & Xiu 2020 use this as their primary validation metric, not RMSE alone)
+ss_res = np.sum((y_test - preds) ** 2)
+ss_tot = np.sum((y_test - y_test.mean()) ** 2)
+oos_r2 = 1 - ss_res / ss_tot
+
+# Directional accuracy (Rossi 2018 evaluates BRT on this alongside MSE)
+directional_accuracy = (np.sign(preds) == np.sign(y_test)).mean()
+
 print(f"\nRMSE: {rmse:.4f}")
+print(f"OOS R^2: {oos_r2:.4f}")
+print(f"Directional accuracy: {directional_accuracy:.1%}")
 
 importance = pd.DataFrame({
     'feature': features,

@@ -52,10 +52,12 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 #### 3. LightGBM Model — `models/train_model.py`
 - Trained on 30 signals from OpenAssetPricing (1986–1999 training period)
 - **Updated (session 3):** added 6 factor-momentum features (1-month and 12-month trailing Mkt_RF, SMB, HML from Fama-French data) per the "Factor Momentum Everywhere" paper takeaway — 36 features total now
-- **RMSE: 0.4007** (down from 0.4159 baseline). The 6 new factor-momentum features ranked #4-#9 out of 36 in feature importance, ahead of most original characteristics — a real improvement, not noise
+- **Updated (session 3):** fixed a validation bug — the old train/test split did `data.iloc[:split]` after sorting by `['permno', 'yyyymm']`, so the "80/20 split" was mostly cross-sectional (leave-some-stocks-out) rather than a real time-based out-of-sample test. Now splits strictly by calendar month (train ≤ cutoff month, test > cutoff month), per the OOS validation approach Freyberger et al. and Rossi (2018) recommend
+- **Results after fix: RMSE 0.3898, OOS R² 0.7033, directional accuracy 87.5%.** The 6 factor-momentum features still rank #4-#9 out of 36 — holds up under the corrected split
+- **Caveat on R²/directional accuracy:** these numbers are far higher than anything in the published literature (Gu/Kelly/Xiu report low-single-digit % R² for real returns) and should **not** be presented as genuine return-prediction skill. Root cause: the model's target is next month's `Mom12m` (a trailing 12-month characteristic), not next month's actual return. Since `Mom12m` at month t and t+1 share 11 of 12 underlying months by construction, most of the apparent predictive power is mechanical autocorrelation in the target definition, not real forecasting. RMSE and the factor-momentum feature ranking are the trustworthy takeaways from this run; R²/directional accuracy are diagnostic only until the target is fixed
 - Saved model: `models/lgbm_model.pkl`
 - Run: `python models/train_model.py`
-- **Caveat:** `backtest.py` and `alpha_test.py` don't consume this model's predictions at all — they equal-weight the 30 raw OpenAssetPricing signal portfolios directly. This RMSE gain won't show up in the 231.9%/0.88 Sharpe/5.82% alpha numbers until a portfolio-construction step is built that actually ranks stocks by the model's output
+- **Caveat:** `backtest.py` and `alpha_test.py` don't consume this model's predictions at all — they equal-weight the 30 raw OpenAssetPricing signal portfolios directly. Model improvements here won't show up in the 231.9%/0.88 Sharpe/5.82% alpha numbers until a portfolio-construction step is built that actually ranks stocks by the model's output
 
 #### 4. Backtest — `models/backtest.py`
 - Uses pre-computed OpenAssetPricing portfolio returns
@@ -101,16 +103,26 @@ source ~/Desktop/Coding/ai-fund/venv/bin/activate
 - **Why it matters:** Checked the installed `openassetpricing` package source (`openap_download.py`) — the only place it fetches raw per-stock returns (`ret` from `crsp.msf`) is `_dl_signal_crsp3()`, which opens a live `wrds.Connection()`. `dl_port('op', ...)` (what `backtest.py`/`alpha_test.py` use) only returns OpenAssetPricing's own pre-computed portfolio-level returns per signal, not raw stock-level returns re-rankable by the model's blended score
 - **Status:** Same WRDS blocker as above — waiting on supervisor access, no separate workaround in progress
 
+### 🔴 Model target should be real returns, also needs WRDS (found session 3)
+- **Problem:** `train_model.py` predicts next month's `Mom12m` characteristic as a proxy target, not the stock's actual next-month return. This inflates OOS R² (0.70) and directional accuracy (87.5%) to implausible levels — mostly mechanical autocorrelation from `Mom12m`'s overlapping 12-month window, not real predictive skill
+- **Why it matters:** Retargeting on genuine forward returns would give an honest, presentable performance metric instead of one that looks fabricated to anyone who knows the literature
+- **Status:** Same WRDS blocker — needs real permno-level forward returns, same as the two blockers above
+
+**Decision: pausing all three of the above until WRDS access comes through, rather than building workarounds.** All three (sentiment merge, model-driven backtest, real-return retargeting) unblock at once, so no separate work is planned on them in the meantime.
+
 ---
 
 ## Next Steps (Priority Order)
-1. **Wait for supervisor reply** on WRDS/CRSP access — unblocks both the sentiment merge AND the model-driven backtest (real permno-level returns)
-2. **Once linking table received:** merge sentiment scores (FinBERT + StockTwits) into signal data → retrain LightGBM with sentiment as features → re-run backtest and CAPM test → ablate to see if either/both sentiment sources actually improve Sharpe/alpha
-3. **Once WRDS access received:** build the model-driven backtest — rank stocks monthly by LightGBM predicted score, form long-short portfolio from real permno-level returns, compare vs. the naive equal-weight `backtest.py` baseline
-4. **Portfolio manager agent** — risk model, portfolio construction layer
-5. **Trader agent** — execution logic
-6. **Auditor agent** — performance monitoring and reporting
-7. **Full multi-agent orchestration** — connect all agents into unified pipeline
+1. **Wait for supervisor reply** on WRDS/CRSP access — unblocks the sentiment merge, the model-driven backtest, AND retargeting the model on real returns (all three paused until this comes through)
+2. **Once linking table + WRDS access received, in order:**
+   - Retarget `train_model.py` on real forward permno-level returns instead of the `Mom12m` proxy → retrain
+   - Merge sentiment scores (FinBERT + StockTwits) into signal data as features → retrain again → ablate to see if either/both sentiment sources improve results
+   - Build the model-driven backtest — rank stocks monthly by predicted score, form long-short portfolio from real returns, compare vs. the naive equal-weight `backtest.py` baseline
+   - Re-run CAPM alpha test on the model-driven portfolio
+3. **Portfolio manager agent** — risk model, portfolio construction layer
+4. **Trader agent** — execution logic
+5. **Auditor agent** — performance monitoring and reporting
+6. **Full multi-agent orchestration** — connect all agents into unified pipeline
 
 ---
 
